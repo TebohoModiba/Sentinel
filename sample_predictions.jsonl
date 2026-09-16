@@ -1,0 +1,4 @@
+{"report_id": "R001", "incident_id": "I001", "relationship": "NEW", "severity": "MEDIUM", "confidence": 0.7, "actions": [{"type": "DISPATCH", "service_id": "SVC-FACILITIES"}], "incident_status": "INVESTIGATING", "human_review": false, "reason": "Water pooling reported near study desks."}
+{"report_id": "R002", "incident_id": "I002", "relationship": "NEW", "severity": "HIGH", "confidence": 0.8, "actions": [{"type": "DISPATCH", "service_id": "SVC-FIRE"}], "incident_status": "ACTIVE", "human_review": false, "reason": "Burning smell reported in E3 electrical lab."}
+{"report_id": "R010", "incident_id": "I002", "relationship": "CORROBORATION", "severity": "HIGH", "confidence": 0.85, "actions": [{"type": "CONTINUE_RESPONSE", "service_id": "SVC-FIRE"}], "incident_status": "ESCALATED", "human_review": false, "reason": "Second report of smoke near a wall socket in E3, same location as R002."}
+
