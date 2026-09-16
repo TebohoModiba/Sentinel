@@ -1,4 +1,3 @@
----
 
 ```markdown
 # Sentinel - Campus Agentic AI
