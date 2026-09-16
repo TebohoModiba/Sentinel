@@ -1,0 +1,13 @@
+service_id,service_name,service_type,availability,scope
+SVC-SECURITY,Campus Protection Services,security,24/7,"Immediate threats, suspicious persons, access control"
+SVC-MEDICAL,Campus First Aid,medical,07:00-19:00,First response and emergency medical escalation
+SVC-EMS,External Emergency Medical Services,medical,24/7,Life-threatening or serious medical emergencies
+SVC-FIRE,Municipal Fire and Rescue,fire,24/7,"Fire, smoke, rescue and hazardous electrical events"
+SVC-FACILITIES,Campus Facilities Helpdesk,facilities,06:00-22:00,"Buildings, plumbing, glass, lifts and general repairs"
+SVC-ELECTRICAL,Electrical Maintenance,electrical,24/7 on-call,"Power failures, exposed wiring and electrical hazards"
+SVC-IT,ICT Service Desk,it,07:00-21:00,"Network, Wi-Fi, authentication and systems outages"
+SVC-ACCESS,Disability and Accessibility Support,accessibility,08:00-17:00,Accessible routes and individual assistance
+SVC-CLEANING,Environmental and Cleaning Services,environmental,06:00-22:00,"Spills, waste, hygiene and contamination"
+SVC-MANAGEMENT,Campus Duty Manager,coordination,24/7 on-call,Cross-service coordination and major incident oversight
+SVC-COMMS,Campus Communications,communications,08:00-17:00/on-call,Verified safety notices and service updates
+SVC-COUNSELLING,Student Wellness and Counselling,wellness,08:00-17:00,Post-incident student support; not emergency response
