@@ -1,4 +1,8 @@
 venv/
+.venv/
 __pycache__/
 *.pyc
-
+.env
+.env.*
+models/__pycache__/
+predictions.jsonl

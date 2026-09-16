@@ -27,20 +27,30 @@ PREDICTIONS_JSONL = "predictions.jsonl"
 
 @st.cache_data
 def load_reports(csv_path):
-    # dtype=str keeps everything as text so we don't accidentally lose
-    # malformed values (e.g. a broken timestamp) to pandas type coercion.
-    return pd.read_csv(csv_path, dtype=str)
+    try:
+        return pd.read_csv(csv_path, dtype=str)
+    except FileNotFoundError:
+        st.error(f"Could not find '{csv_path}'. Please make sure the CSV file exists.")
+        st.stop()
 
 
 @st.cache_data
 def load_predictions(jsonl_path):
     predictions = []
-    with open(jsonl_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            predictions.append(json.loads(line))
+    try:
+        with open(jsonl_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                data = json.loads(line)
+                # Support both raw decision dicts and wrapped {"prediction": {...}}
+                if "prediction" in data and isinstance(data["prediction"], dict):
+                    predictions.append(data["prediction"])
+                else:
+                    predictions.append(data)
+    except FileNotFoundError:
+        return []
     return predictions
 
 
@@ -48,10 +58,9 @@ reports_df = load_reports(REPORTS_CSV)
 predictions = load_predictions(PREDICTIONS_JSONL)
 
 if len(predictions) == 0:
-    st.error("predictions.jsonl is empty. Run the agent to generate predictions first.")
+    st.warning("`predictions.jsonl` is empty or missing. Run the agent to generate predictions first.")
     st.stop()
 
-# Lookup so we can pull the original raw fields for any report_id
 reports_by_id = reports_df.set_index("report_id").to_dict(orient="index")
 
 
@@ -81,13 +90,21 @@ SEVERITY_ICON = {
 }
 
 def severity_badge(sev):
-    return f"{SEVERITY_ICON.get(sev, '⚪')} {sev}"
+    key = str(sev or "").upper()
+    return f"{SEVERITY_ICON.get(key, '⚪')} {key}"
 
 
 def action_summary(actions):
     if not actions:
         return "No new action"
-    return ", ".join(a.get("type", "?") for a in actions)
+    return ", ".join(a.get("type", "?") for a in actions if isinstance(a, dict))
+
+
+def pretty_relationship(rel):
+    """Map canonical lowercase -> Title Case for display."""
+    if not rel:
+        return "-"
+    return str(rel).replace("_", " ").title()
 
 
 # ---------- View 1: Incoming Report ----------
@@ -105,6 +122,7 @@ with col1:
 with col2:
     st.markdown(f"**Category (as reported):** {raw.get('category', 'N/A')}")
     st.markdown(f"**Severity (as reported):** {raw.get('reported_severity', 'N/A')}")
+    st.markdown(f"**Decision label:** {current.get('decision', 'N/A')}")
 
 st.markdown(f"**Description:** {raw.get('description', 'N/A')}")
 
@@ -123,11 +141,13 @@ for pred in processed:
     row = {
         "Report ID": pred.get("report_id"),
         "Incident ID": pred.get("incident_id"),
-        "Relationship": pred.get("relationship"),
+        "Relationship": pretty_relationship(pred.get("relationship")),
+        "Decision": pred.get("decision", "-"),
         "Severity": severity_badge(pred.get("severity", "")),
         "Confidence": pred.get("confidence"),
+        "Service": pred.get("service", "-"),
         "Action(s)": action_summary(pred.get("actions", [])),
-        "Status": pred.get("incident_status"),
+        "Status": pred.get("incident_status", pred.get("status")),
         "Human review": "Yes" if pred.get("human_review") else "No",
         "Reason": pred.get("reason", pred.get("explanation", "")),
     }
@@ -137,7 +157,8 @@ log_df = pd.DataFrame(log_rows)
 
 
 def highlight_row(row):
-    if row["Relationship"] == "CONFLICT":
+    rel = str(row["Relationship"]).lower()
+    if "conflict" in rel:
         return ["background-color: #ffe0e0"] * len(row)
     if row["Human review"] == "Yes":
         return ["background-color: #fff3cd"] * len(row)
@@ -158,8 +179,6 @@ st.divider()
 
 st.header("3. Incident Summary")
 
-# Walk through processed predictions in order, keeping the most recent
-# state seen for each incident_id and a running list of its reports.
 incidents = {}
 for pred in processed:
     inc_id = pred.get("incident_id")
@@ -173,10 +192,8 @@ for pred in processed:
     info["report_ids"].append(pred.get("report_id"))
     info["severity_history"].append(pred.get("severity"))
 
-    # These get overwritten each time we see the incident again,
-    # so after the loop they hold the LATEST known state.
     info["latest_severity"] = pred.get("severity")
-    info["latest_status"] = pred.get("incident_status")
+    info["latest_status"] = pred.get("incident_status", pred.get("status"))
     info["latest_confidence"] = pred.get("confidence")
     info["latest_actions"] = pred.get("actions", [])
     info["latest_reason"] = pred.get("reason", pred.get("explanation", ""))
@@ -196,7 +213,7 @@ else:
             st.markdown(f"**Current confidence:** {info['latest_confidence']}")
             st.markdown(
                 f"**Reports linked ({len(info['report_ids'])}):** "
-                + ", ".join(info["report_ids"])
+                + ", ".join(str(r) for r in info["report_ids"])
             )
             st.markdown(
                 "**Severity over time:** "
@@ -207,7 +224,13 @@ else:
             if info["latest_actions"]:
                 st.markdown("**Current action(s):**")
                 for a in info["latest_actions"]:
-                    st.markdown(f"- {a.get('type')} → {a.get('service_id', 'N/A')}")
+                    if isinstance(a, dict):
+                        st.markdown(
+                            f"- {a.get('type', '?')} → "
+                            f"{a.get('service_name') or a.get('service_id', 'N/A')}"
+                        )
+                    else:
+                        st.markdown(f"- {a}")
             else:
                 st.markdown("**Current action(s):** None (existing response still sufficient)")
 
@@ -229,13 +252,15 @@ for pred in processed:
         continue
 
     for a in actions:
+        if not isinstance(a, dict):
+            a = {"type": str(a)}
         action_rows.append({
             "Incident ID": pred.get("incident_id"),
             "Report ID": report_id,
             "Time": ts,
-            "Action": a.get("type"),
-            "Service": a.get("service_id", "N/A"),
-            "Incident status at the time": pred.get("incident_status"),
+            "Action": a.get("type", "?"),
+            "Service": a.get("service_name") or a.get("service_id", "N/A"),
+            "Incident status at the time": pred.get("incident_status", pred.get("status")),
         })
 
 if action_rows:
