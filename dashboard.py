@@ -165,10 +165,24 @@ def highlight_row(row):
     return [""] * len(row)
 
 
-st.dataframe(
-    log_df.style.apply(highlight_row, axis=1),
-    use_container_width=True,
-    height=420,
+# NOTE: st.dataframe() pulls in pyarrow under the hood, which can be blocked
+# by Application Control / WDAC policies on locked-down machines. Rendering
+# the styled table as HTML avoids pyarrow entirely while keeping the same
+# row highlighting and layout.
+styled_html = (
+    log_df.style
+    .apply(highlight_row, axis=1)
+    .set_table_styles([
+        {"selector": "th", "props": [("text-align", "left"), ("padding", "6px 10px")]},
+        {"selector": "td", "props": [("padding", "6px 10px")]},
+    ])
+    .set_properties(**{"font-size": "0.9rem"})
+    .to_html()
+)
+
+st.markdown(
+    f'<div style="max-height:420px; overflow:auto;">{styled_html}</div>',
+    unsafe_allow_html=True,
 )
 st.caption("Red rows: conflicting evidence. Yellow rows: flagged for human review.")
 
@@ -265,6 +279,10 @@ for pred in processed:
 
 if action_rows:
     action_df = pd.DataFrame(action_rows)
-    st.dataframe(action_df, use_container_width=True, height=420)
+    # Same pyarrow-avoidance as the Decision Log above.
+    st.markdown(
+        f'<div style="max-height:420px; overflow:auto;">{action_df.to_html(index=False)}</div>',
+        unsafe_allow_html=True,
+    )
 else:
     st.info("No actions dispatched yet at this point in the replay.")
